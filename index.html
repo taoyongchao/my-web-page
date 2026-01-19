@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Button Component</title>
+    <style>
+        /* Button Component Styles */
+        :root {
+            --ac-color-primary: #007AFF;
+            --ac-color-background: #FFFFFF;
+            --ac-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+            --ac-radius: 4px;
+            --ac-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        body {
+            font-family: var(--ac-font-family);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f7;
+        }
+
+        .ac-button {
+            font-family: var(--ac-font-family, system-ui, sans-serif);
+            border-radius: var(--ac-radius, 4px);
+            background: var(--ac-color-primary, #007AFF);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 44px; /* Apple touch target */
+            font-size: 17px;
+            font-weight: 400;
+            letter-spacing: -0.41px;
+            box-shadow: var(--ac-shadow);
+        }
+
+        .ac-button:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
+        .ac-button:focus {
+            outline: 2px solid var(--ac-color-primary);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Button Component -->
+    <button class="ac-button" role="button" aria-label="Apple Design Button" tabindex="0">
+      Click Me
+    </button>
+
+    <script>
+        // Button Component JavaScript
+        class Button {
+          constructor(element) {
+            this.element = element;
+            this.init();
+          }
+
+          init() {
+            this.element.addEventListener('click', this.handleClick.bind(this));
+            this.element.addEventListener('keydown', this.handleKeydown.bind(this));
+          }
+
+          handleClick(event) {
+            // Custom click handler
+            console.log('Button clicked');
+            // Dispatch custom event
+            this.element.dispatchEvent(new CustomEvent('ac:button:click', {
+              detail: { button: this.element }
+            }));
+          }
+
+          handleKeydown(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              this.handleClick(event);
+            }
+          }
+        }
+
+        // Auto-initialize components
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('.ac-button').forEach(element => {
+            new Button(element);
+          });
+        });
+    </script>
+</body>
+</html>
