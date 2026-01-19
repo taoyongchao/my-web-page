@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apple Button Component</title>
+    <title>Excel File Comparator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        /* Button Component Styles */
         :root {
             --ac-color-primary: #007AFF;
             --ac-color-background: #FFFFFF;
             --ac-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
-            --ac-radius: 4px;
-            --ac-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            --ac-radius: 12px;
+            --ac-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
         body {
@@ -24,75 +24,274 @@
             background-color: #f5f5f7;
         }
 
+        #app-container {
+            background: var(--ac-color-background);
+            padding: 32px;
+            border-radius: var(--ac-radius);
+            box-shadow: var(--ac-shadow);
+            width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+            margin: 0;
+        }
+
+        .file-input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 500;
+        }
+
+        input[type="file"] {
+            font-family: var(--ac-font-family);
+        }
+
         .ac-button {
             font-family: var(--ac-font-family, system-ui, sans-serif);
-            border-radius: var(--ac-radius, 4px);
+            border-radius: 8px;
             background: var(--ac-color-primary, #007AFF);
             color: white;
             border: none;
             padding: 12px 24px;
             cursor: pointer;
             transition: all 0.2s ease;
-            min-height: 44px; /* Apple touch target */
+            min-height: 44px;
             font-size: 17px;
             font-weight: 400;
             letter-spacing: -0.41px;
-            box-shadow: var(--ac-shadow);
         }
 
         .ac-button:hover {
             opacity: 0.8;
-            transform: translateY(-1px);
         }
 
-        .ac-button:focus {
-            outline: 2px solid var(--ac-color-primary);
-            outline-offset: 2px;
+        .ac-button:disabled {
+            background-color: #d1d1d6;
+            cursor: not-allowed;
+        }
+
+        #key-columns-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <!-- Button Component -->
-    <button class="ac-button" role="button" aria-label="Apple Design Button" tabindex="0">
-      Click Me
-    </button>
+    <div id="app-container">
+        <h1>Excel File Comparator</h1>
+
+        <div class="file-input-section">
+            <label for="last-week-files">Last Week Files (up to 5)</label>
+            <input type="file" id="last-week-files" multiple accept=".xlsx, .xls">
+        </div>
+
+        <div class="file-input-section">
+            <label for="current-week-files">Current Week Files (up to 5)</label>
+            <input type="file" id="current-week-files" multiple accept=".xlsx, .xls">
+        </div>
+
+        <button id="combine-files-btn" class="ac-button">Combine Files</button>
+
+        <div id="key-columns-container" class="hidden">
+            <h2>Select Key Columns</h2>
+            <div id="key-columns-checkboxes"></div>
+        </div>
+
+        <button id="summary-report-btn" class="ac-button hidden">Generate Summary Report</button>
+        <button id="gap-list-btn" class="ac-button hidden">Generate Gap List</button>
+    </div>
 
     <script>
-        // Button Component JavaScript
-        class Button {
-          constructor(element) {
-            this.element = element;
-            this.init();
-          }
-
-          init() {
-            this.element.addEventListener('click', this.handleClick.bind(this));
-            this.element.addEventListener('keydown', this.handleKeydown.bind(this));
-          }
-
-          handleClick(event) {
-            // Custom click handler
-            console.log('Button clicked');
-            // Dispatch custom event
-            this.element.dispatchEvent(new CustomEvent('ac:button:click', {
-              detail: { button: this.element }
-            }));
-          }
-
-          handleKeydown(event) {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              this.handleClick(event);
-            }
-          }
-        }
-
-        // Auto-initialize components
         document.addEventListener('DOMContentLoaded', () => {
-          document.querySelectorAll('.ac-button').forEach(element => {
-            new Button(element);
-          });
+            const lastWeekFilesInput = document.getElementById('last-week-files');
+            const currentWeekFilesInput = document.getElementById('current-week-files');
+            const combineBtn = document.getElementById('combine-files-btn');
+            const summaryBtn = document.getElementById('summary-report-btn');
+            const gapListBtn = document.getElementById('gap-list-btn');
+            const keyColumnsContainer = document.getElementById('key-columns-container');
+            const keyColumnsCheckboxes = document.getElementById('key-columns-checkboxes');
+
+            let combinedLastWeekData = [];
+            let combinedCurrentWeekData = [];
+
+            combineBtn.addEventListener('click', async () => {
+                combineBtn.textContent = 'Combining...';
+                combineBtn.disabled = true;
+
+                const lastWeekFiles = lastWeekFilesInput.files;
+                const currentWeekFiles = currentWeekFilesInput.files;
+
+                combinedLastWeekData = await processFiles(lastWeekFiles);
+                combinedCurrentWeekData = await processFiles(currentWeekFiles);
+
+                const headers = getHeaders(combinedLastWeekData, combinedCurrentWeekData);
+                populateKeyColumns(headers);
+
+                combineBtn.textContent = 'Combine Files';
+                combineBtn.disabled = false;
+                keyColumnsContainer.classList.remove('hidden');
+                summaryBtn.classList.remove('hidden');
+                gapListBtn.classList.remove('hidden');
+            });
+
+            summaryBtn.addEventListener('click', () => {
+                const selectedKeys = getSelectedKeys();
+                if (selectedKeys.length === 0) {
+                    alert('Please select at least one key column.');
+                    return;
+                }
+                generateSummaryReport(selectedKeys);
+            });
+
+            gapListBtn.addEventListener('click', () => {
+                generateGapListReport();
+            });
+
+            async function processFiles(files) {
+                let allData = [];
+                for (const file of files) {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data);
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    allData = allData.concat(jsonData);
+                }
+                return allData;
+            }
+
+            function getHeaders(data1, data2) {
+                const headers = new Set();
+                if (data1.length > 0) {
+                    Object.keys(data1[0]).forEach(header => headers.add(header));
+                }
+                if (data2.length > 0) {
+                    Object.keys(data2[0]).forEach(header => headers.add(header));
+                }
+                return Array.from(headers);
+            }
+
+            function populateKeyColumns(headers) {
+                keyColumnsCheckboxes.innerHTML = '';
+                headers.forEach(header => {
+                    const checkboxContainer = document.createElement('div');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = header;
+                    checkbox.value = header;
+                    const label = document.createElement('label');
+                    label.htmlFor = header;
+                    label.textContent = header;
+                    checkboxContainer.appendChild(checkbox);
+                    checkboxContainer.appendChild(label);
+                    keyColumnsCheckboxes.appendChild(checkboxContainer);
+                });
+            }
+
+            function getSelectedKeys() {
+                const selectedKeys = [];
+                keyColumnsCheckboxes.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                    selectedKeys.push(checkbox.value);
+                });
+                return selectedKeys;
+            }
+
+            function generateSummaryReport(keys) {
+                const lastWeekMap = createDataMap(combinedLastWeekData, keys);
+                const currentWeekMap = createDataMap(combinedCurrentWeekData, keys);
+
+                const added = [];
+                const removed = [];
+                const quantityChanged = [];
+
+                for (const [key, currentRow] of currentWeekMap.entries()) {
+                    if (!lastWeekMap.has(key)) {
+                        added.push(currentRow);
+                    } else {
+                        const lastRow = lastWeekMap.get(key);
+                        if (currentRow['Quantity'] !== lastRow['Quantity']) {
+                            quantityChanged.push({ ...currentRow, 'Old Quantity': lastRow['Quantity'] });
+                        }
+                    }
+                }
+
+                for (const [key, lastRow] of lastWeekMap.entries()) {
+                    if (!currentWeekMap.has(key)) {
+                        removed.push(lastRow);
+                    }
+                }
+
+                const wb = XLSX.utils.book_new();
+                const addedSheet = XLSX.utils.json_to_sheet(added);
+                const removedSheet = XLSX.utils.json_to_sheet(removed);
+                const changedSheet = XLSX.utils.json_to_sheet(quantityChanged);
+
+                XLSX.utils.book_append_sheet(wb, addedSheet, "Added");
+                XLSX.utils.book_append_sheet(wb, removedSheet, "Removed");
+                XLSX.utils.book_append_sheet(wb, changedSheet, "Quantity Changed");
+
+                XLSX.writeFile(wb, "Summary_Report.xlsx");
+            }
+
+            function createDataMap(data, keys) {
+                const map = new Map();
+                for (const row of data) {
+                    const key = keys.map(k => row[k]).join('|');
+                    map.set(key, row);
+                }
+                return map;
+            }
+
+            function generateGapListReport() {
+                const aqidChanges = {};
+
+                const processGapData = (data, week) => {
+                    data.forEach(row => {
+                        const aqid = row['AQID'];
+                        if (!aqidChanges[aqid]) {
+                            aqidChanges[aqid] = { last: 0, current: 0, rows: [] };
+                        }
+                        const quantity = parseInt(row['Quantity'], 10) || 0;
+                        if (week === 'last') {
+                            aqidChanges[aqid].last += quantity;
+                        } else {
+                            aqidChanges[aqid].current += quantity;
+                        }
+                        aqidChanges[aqid].rows.push({ ...row, Week: week });
+                    });
+                };
+
+                processGapData(combinedLastWeekData, 'last');
+                processGapData(combinedCurrentWeekData, 'current');
+
+                const gapRows = [];
+                for (const aqid in aqidChanges) {
+                    if (aqidChanges[aqid].last !== aqidChanges[aqid].current) {
+                        gapRows.push(...aqidChanges[aqid].rows);
+                    }
+                }
+
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(gapRows);
+                XLSX.utils.book_append_sheet(wb, ws, "Gap List");
+                XLSX.writeFile(wb, "Gap_List_Report.xlsx");
+            }
         });
     </script>
 </body>
